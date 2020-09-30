@@ -5,19 +5,14 @@ using System;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using NUnit.Framework;
+using FluentAssertions;
+using Xunit;
 
 namespace EasyNetQ.Tests
 {
-    [TestFixture]
     public class MessagePropertiesTests
     {
-        [SetUp]
-        public void SetUp()
-        {
-        }
-
-        [Test]
+        [Fact]
         public void Should_copy_from_Rabbit_client_properties()
         {
             const string replyTo = "reply to";
@@ -27,10 +22,10 @@ namespace EasyNetQ.Tests
 
             properties.CopyFrom(originalProperties);
 
-            properties.ReplyTo.ShouldEqual(replyTo);
+            properties.ReplyTo.Should().Be(replyTo);
         }
 
-        [Test]
+        [Fact]
         public void Should_copy_to_rabbit_client_properties()
         {
             const string replyTo = "reply to";
@@ -40,12 +35,12 @@ namespace EasyNetQ.Tests
 
             properties.CopyTo(destinationProperties);
 
-            destinationProperties.ReplyTo.ShouldEqual(replyTo);
-            destinationProperties.IsReplyToPresent().ShouldBeTrue();
-            destinationProperties.IsMessageIdPresent().ShouldBeFalse();
+            destinationProperties.ReplyTo.Should().Be(replyTo);
+            destinationProperties.IsReplyToPresent().Should().BeTrue();
+            destinationProperties.IsMessageIdPresent().Should().BeFalse();
         }
 
-        [Test]
+        [Fact]
         public void Should_clone()
         {
             const string replyTo = "reply to";
@@ -61,13 +56,13 @@ namespace EasyNetQ.Tests
 
             var destinationProperties = (MessageProperties)properties.Clone();
 
-            destinationProperties.ReplyTo.ShouldEqual(replyTo);
-            destinationProperties.ReplyToPresent.ShouldBeTrue();
-            destinationProperties.MessageIdPresent.ShouldBeFalse();
-            destinationProperties.Headers.ShouldEqual(properties.Headers);
+            destinationProperties.ReplyTo.Should().Be(replyTo);
+            destinationProperties.ReplyToPresent.Should().BeTrue();
+            destinationProperties.MessageIdPresent.Should().BeFalse();
+            destinationProperties.Headers.Should().BeEquivalentTo(properties.Headers);
         }
 
-        [Test]
+        [Fact]
         public void Should_be_able_to_write_debug_properties()
         {
             const string expectedDebugProperties = 
@@ -101,10 +96,10 @@ namespace EasyNetQ.Tests
                     UserId = "userid",
                 };
 
-            properties.ToString().ShouldEqual(expectedDebugProperties);
+            properties.ToString().Should().Be(expectedDebugProperties);
         }
 
-        [Test]
+        [Fact]
         public void Should_throw_if_any_string_property_exceeds_255_chars()
         {
             var longInput = new String('*', 256);
@@ -132,7 +127,7 @@ namespace EasyNetQ.Tests
                 }
                 if (!threw)
                 {
-                    Assert.Fail("Over length property set didn't fail");
+                    Assert.True(false, "Over length property set didn't fail");
                 }
             }
         }

@@ -2,30 +2,26 @@
 
 using System;
 using System.Threading;
-using EasyNetQ.Loggers;
-using NUnit.Framework;
+using Xunit;
 
 namespace EasyNetQ.Tests.Integration
 {
-    [TestFixture]
     [Explicit("Requires a local RabbitMQ instance to work")]
-    public class PolymorphicPubSub
+    public class PolymorphicPubSub : IDisposable
     {
         private IBus bus;
 
-        [SetUp]
-        public void SetUp()
+        public PolymorphicPubSub()
         {
-            bus = RabbitHutch.CreateBus("host=localhost", x => x.Register<IEasyNetQLogger, NullLogger>());
+            bus = RabbitHutch.CreateBus("host=localhost");
         }
 
-        [TearDown]
-        public void TearDown()
+        public void Dispose()
         {
             bus.Dispose();
         }
 
-        [Test]
+        [Fact]
         public void Should_publish_some_animals()
         {
             var cat = new Cat
@@ -44,7 +40,7 @@ namespace EasyNetQ.Tests.Integration
             bus.Publish<IAnimal>(dog);
         }
 
-        [Test]
+        [Fact]
         public void Should_consume_the_correct_message_type()
         {
             bus.Subscribe<IAnimal>("polymorphic_test", @interface =>

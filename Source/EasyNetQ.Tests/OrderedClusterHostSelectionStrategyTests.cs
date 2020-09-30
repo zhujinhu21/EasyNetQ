@@ -1,18 +1,17 @@
 ﻿// ReSharper disable InconsistentNaming
 
 using System.IO;
-using NUnit.Framework;
+using FluentAssertions;
+using Xunit;
 
 namespace EasyNetQ.Tests
 {
-    [TestFixture]
     public class OrderedClusterHostSelectionStrategyTests
     {
         private IClusterHostSelectionStrategy<string> defaultClusterHostSelectionStrategy;
         private StringWriter writer;    
 
-        [SetUp]
-        public void SetUp()
+        public OrderedClusterHostSelectionStrategyTests()
         {
             defaultClusterHostSelectionStrategy = new OrderedClusterHostSelectionStrategy<string>
             {
@@ -25,7 +24,7 @@ namespace EasyNetQ.Tests
             writer = new StringWriter();
         }
 
-        [Test]
+        [Fact]
         public void Should_end_after_every_item_has_been_returned()
         {
             do
@@ -34,11 +33,11 @@ namespace EasyNetQ.Tests
                 writer.Write(item);
             } while (defaultClusterHostSelectionStrategy.Next());
 
-            writer.ToString().ShouldEqual("0123");
-            defaultClusterHostSelectionStrategy.Succeeded.ShouldBeFalse();
+            writer.ToString().Should().Be("0123");
+            defaultClusterHostSelectionStrategy.Succeeded.Should().BeFalse();
         }
 
-        [Test]
+        [Fact]
         public void Should_end_once_success_is_called()
         {
             var count = 0;
@@ -52,11 +51,11 @@ namespace EasyNetQ.Tests
 
             } while (defaultClusterHostSelectionStrategy.Next());
 
-            writer.ToString().ShouldEqual("01");
-            defaultClusterHostSelectionStrategy.Succeeded.ShouldBeTrue();
+            writer.ToString().Should().Be("01");
+            defaultClusterHostSelectionStrategy.Succeeded.Should().BeTrue();
         }
 
-        [Test]
+        [Fact]
         public void Should_restart_from_next_item_and_then_try_all()
         {
             for (var i = 0; i < 10; i++)
@@ -75,7 +74,7 @@ namespace EasyNetQ.Tests
                 writer.Write("_");
             }
 
-            writer.ToString().ShouldEqual("012_301_230_123_012_301_230_123_012_301_");
+            writer.ToString().Should().Be("012_301_230_123_012_301_230_123_012_301_");
         }
     }
 }

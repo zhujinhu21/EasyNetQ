@@ -17,19 +17,19 @@ namespace EasyNetQ.Hosepipe
 
         public void PublishMessagesToQueue(IEnumerable<HosepipeMessage> messages, QueueParameters parameters)
         {
-            using (var connection = HosepipeConnection.FromParamters(parameters))
+            using (var connection = HosepipeConnection.FromParameters(parameters))
             using (var channel = connection.CreateModel())
             {
                 foreach (var message in messages)
                 {
                     var body = errorMessageSerializer.Deserialize(message.Body);
 
-                    var properties = new BasicProperties();
+                    var properties = channel.CreateBasicProperties();
                     message.Properties.CopyTo(properties);
 
-                    channel.BasicPublish(message.Info.Exchange, message.Info.RoutingKey, properties, body);
+                    channel.BasicPublish(message.Info.Exchange, message.Info.RoutingKey, true, properties, body);
                 }
-            }                        
+            }
         }
     }
 }

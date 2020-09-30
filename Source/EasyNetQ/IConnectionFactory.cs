@@ -1,4 +1,5 @@
-﻿using RabbitMQ.Client;
+﻿using System;
+using RabbitMQ.Client;
 
 namespace EasyNetQ
 {
@@ -15,7 +16,7 @@ namespace EasyNetQ
 
     public class ConnectionFactoryWrapper : IConnectionFactory
     {
-        public virtual ConnectionConfiguration Configuration { get; private set; }
+        public virtual ConnectionConfiguration Configuration { get; }
         private readonly IClusterHostSelectionStrategy<ConnectionFactoryInfo> clusterHostSelectionStrategy;
 
         public ConnectionFactoryWrapper(ConnectionConfiguration connectionConfiguration, IClusterHostSelectionStrategy<ConnectionFactoryInfo> clusterHostSelectionStrategy)
@@ -38,14 +39,14 @@ namespace EasyNetQ
 
                 if (connectionConfiguration.AMQPConnectionString != null)
                 {
-                    connectionFactory.uri = connectionConfiguration.AMQPConnectionString;
+                    connectionFactory.Uri = connectionConfiguration.AMQPConnectionString;
                 }
 
                 connectionFactory.HostName = hostConfiguration.Host;
-                
+
                 if(connectionFactory.VirtualHost == "/")
                     connectionFactory.VirtualHost = Configuration.VirtualHost;
-                
+
                 if(connectionFactory.UserName == "guest")
                     connectionFactory.UserName = Configuration.UserName;
 
@@ -62,7 +63,7 @@ namespace EasyNetQ
                 else if (Configuration.Ssl.Enabled)
                     connectionFactory.Ssl = Configuration.Ssl;
 
-                connectionFactory.RequestedHeartbeat = Configuration.RequestedHeartbeat;
+                connectionFactory.RequestedHeartbeat = TimeSpan.FromSeconds(Configuration.RequestedHeartbeat);
                 connectionFactory.ClientProperties = Configuration.ClientProperties;
                 connectionFactory.AuthMechanisms = Configuration.AuthMechanisms;
                 clusterHostSelectionStrategy.Add(new ConnectionFactoryInfo(connectionFactory, hostConfiguration));
@@ -71,13 +72,12 @@ namespace EasyNetQ
 
         public virtual IConnection CreateConnection()
         {
-            return clusterHostSelectionStrategy.Current().ConnectionFactory.CreateConnection();
+            object connectionNameValue = null;
+            Configuration?.ClientProperties.TryGetValue("connection_name", out connectionNameValue);
+            return clusterHostSelectionStrategy.Current().ConnectionFactory.CreateConnection(connectionNameValue as string);
         }
 
-        public virtual HostConfiguration CurrentHost
-        {
-            get { return clusterHostSelectionStrategy.Current().HostConfiguration; }
-        }
+        public virtual HostConfiguration CurrentHost => clusterHostSelectionStrategy.Current().HostConfiguration;
 
         public virtual bool Next()
         {
@@ -94,10 +94,7 @@ namespace EasyNetQ
             clusterHostSelectionStrategy.Success();
         }
 
-        public virtual bool Succeeded
-        {
-            get { return clusterHostSelectionStrategy.Succeeded; }
-        }
+        public virtual bool Succeeded => clusterHostSelectionStrategy.Succeeded;
     }
 
     public class ConnectionFactoryInfo

@@ -1,42 +1,52 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Threading;
 
 namespace EasyNetQ
 {
     public sealed class TimeBudget
-    {
-        public TimeBudget(TimeSpan budget, TimeSpan precision)
+    {   
+        private static readonly TimeSpan Precision = TimeSpan.FromMilliseconds(1);
+        
+        private readonly TimeSpan budget;
+        private readonly Stopwatch watch;
+
+        private TimeBudget(Stopwatch watch, TimeSpan budget)
         {
+            this.watch = watch;
             this.budget = budget;
-            this.precision = precision;
-            watch = new Stopwatch();
         }
 
-        public TimeBudget(TimeSpan budget)
-            : this(budget, TimeSpan.FromMilliseconds(5)) { }
-
-        public TimeBudget Start()
+        public static TimeBudget Infinite()
         {
-            watch.Start();
-            return this;
+            return new TimeBudget(Stopwatch.StartNew(), Timeout.InfiniteTimeSpan);
         }
 
-        public TimeSpan GetRemainingTime()
+        public static TimeBudget Start(TimeSpan budget)
         {
-            var remaining = budget - watch.Elapsed;
-            return remaining < precision
-                ? TimeSpan.Zero
-                : remaining;
+            return new TimeBudget(Stopwatch.StartNew(), budget);
         }
 
         public bool IsExpired()
         {
+            if (budget == Timeout.InfiniteTimeSpan)
+            {
+                return false;
+            }
+
             var remaining = budget - watch.Elapsed;
-            return remaining < precision;
+            return remaining < Precision;
         }
 
-        private readonly TimeSpan budget;
-        private readonly TimeSpan precision;
-        private readonly Stopwatch watch;
+        public static implicit operator TimeSpan(TimeBudget source)
+        {
+            if (source.budget == Timeout.InfiniteTimeSpan)
+            {
+                return Timeout.InfiniteTimeSpan;
+            }
+
+            var remaining = source.budget - source.watch.Elapsed;
+            return remaining < Precision ? TimeSpan.Zero : remaining;
+        }
     }
 }

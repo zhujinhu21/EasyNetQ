@@ -4,31 +4,30 @@ using System;
 using System.Threading;
 using EasyNetQ.ConnectionString;
 using EasyNetQ.Producer;
-using NUnit.Framework;
+using FluentAssertions;
+using Xunit;
 using RabbitMQ.Client;
-using Rhino.Mocks;
+using NSubstitute;
 
 namespace EasyNetQ.Tests.ClientCommandDispatcherTests
 {
-    [TestFixture]
-    public class When_an_action_is_invoked
+    public class When_an_action_is_invoked : IDisposable
     {
         private IClientCommandDispatcher dispatcher;
         private IPersistentChannel channel;
         private bool actionWasInvoked;
         private string actionThreadName;
 
-        [SetUp]
-        public void SetUp()
+        public When_an_action_is_invoked()
         {
             actionWasInvoked = false;
             actionThreadName = "Not set";
 
             var parser = new ConnectionStringParser();
             var configuration = parser.Parse("host=localhost");
-            var connection = MockRepository.GenerateStub<IPersistentConnection>();
-            var channelFactory = MockRepository.GenerateStub<IPersistentChannelFactory>();
-            channel = MockRepository.GenerateStub<IPersistentChannel>();
+            var connection = Substitute.For<IPersistentConnection>();
+            var channelFactory = Substitute.For<IPersistentChannelFactory>();
+            channel = Substitute.For<IPersistentChannel>();
 
             Action<IModel> action = x =>
                 {
@@ -36,37 +35,36 @@ namespace EasyNetQ.Tests.ClientCommandDispatcherTests
                     actionThreadName = Thread.CurrentThread.Name;
                 };
 
-            channelFactory.Stub(x => x.CreatePersistentChannel(connection)).Return(channel);
-            channel.Stub(x => x.InvokeChannelAction(null)).IgnoreArguments().WhenCalled(
-                x => ((Action<IModel>)x.Arguments[0])(null));
+            channelFactory.CreatePersistentChannel(connection).Returns(channel);
+            channel.When(x => x.InvokeChannelAction(Arg.Any<Action<IModel>>()))
+                   .Do(x => ((Action<IModel>)x[0])(null));
 
             dispatcher = new ClientCommandDispatcher(configuration, connection, channelFactory);
 
             dispatcher.InvokeAsync(action).Wait();
         }
 
-        [TearDown]
-        public void TearDown()
+        public void Dispose()
         {
             dispatcher.Dispose();
         }
 
-        [Test]
+        [Fact]
         public void Should_create_a_persistent_channel()
         {
-            channel.ShouldNotBeNull();
+            channel.Should().NotBeNull();
         }
 
-        [Test]
+        [Fact]
         public void Should_invoke_the_action()
         {
-            actionWasInvoked.ShouldBeTrue();
+            actionWasInvoked.Should().BeTrue();
         }
 
-        [Test]
+        [Fact]
         public void Should_invoke_the_action_on_the_dispatcher_thread()
         {
-            actionThreadName.ShouldEqual("Client Command Dispatcher Thread");
+            actionThreadName.Should().Be("EasyNetQ client command dispatch thread");
         }
     }
 }

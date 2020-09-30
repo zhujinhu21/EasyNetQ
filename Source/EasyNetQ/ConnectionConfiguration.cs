@@ -10,6 +10,7 @@ namespace EasyNetQ
     public class ConnectionConfiguration
     {
         private const int DefaultPort = 5672;
+        private const int DefaultAmqpsPort = 5671;
         public ushort Port { get; set; }
         public string VirtualHost { get; set; }
         public string UserName { get; set; }
@@ -20,22 +21,23 @@ namespace EasyNetQ
         public ushort RequestedHeartbeat { get; set; }
         public ushort PrefetchCount { get; set; }
         public Uri AMQPConnectionString { get; set; }
-        public IDictionary<string, object> ClientProperties { get; private set; } 
+        public IDictionary<string, object> ClientProperties { get; }
 
         public IEnumerable<HostConfiguration> Hosts { get; set; }
-        public SslOption Ssl { get; private set; }
+        public SslOption Ssl { get; }
         /// <summary>
         /// Operation timeout seconds. (default is 10)
         /// </summary>
         public ushort Timeout { get; set; }
         public bool PublisherConfirms { get; set; }
         public bool PersistentMessages { get; set; }
-        public bool CancelOnHaFailover { get; set; }
         public string Product { get; set; }
         public string Platform { get; set; }
+        public string Name { get; set; }
         public bool UseBackgroundThreads { get; set; }
-        public IList<AuthMechanismFactory> AuthMechanisms { get; set; }
+        public IList<IAuthMechanismFactory> AuthMechanisms { get; set; }
         public TimeSpan ConnectIntervalAttempt { get;  set; }
+        public int DispatcherQueueSize { get; set; }
 
         public ConnectionConfiguration()
         {
@@ -48,26 +50,32 @@ namespace EasyNetQ
             Timeout = 10; // seconds
             PublisherConfirms = false;
             PersistentMessages = true;
-            CancelOnHaFailover = false;
             UseBackgroundThreads = false;
             ConnectIntervalAttempt = TimeSpan.FromSeconds(5);
-                         
+            DispatcherQueueSize = 1024;
+
             // prefetchCount determines how many messages will be allowed in the local in-memory queue
             // setting to zero makes this infinite, but risks an out-of-memory exception.
             // set to 50 based on this blog post:
             // http://www.rabbitmq.com/blog/2012/04/25/rabbitmq-performance-measurements-part-2/
             PrefetchCount = 50;
-            AuthMechanisms = new AuthMechanismFactory[] {new PlainMechanismFactory()};
-            
+            AuthMechanisms = new IAuthMechanismFactory[] {new PlainMechanismFactory()};
+
             Hosts = new List<HostConfiguration>();
 
             Ssl = new SslOption();
+            ClientProperties = new Dictionary<string, object>();
         }
 
         private void SetDefaultClientProperties(IDictionary<string, object> clientProperties)
         {
+            string applicationNameAndPath = null;
+#if !NETFX
+            var version = this.GetType().GetTypeInfo().Assembly.GetName().Version.ToString();
+#else
             var version = Assembly.GetExecutingAssembly().GetName().Version.ToString();
-            var applicationNameAndPath = Environment.GetCommandLineArgs()[0];
+#endif
+            applicationNameAndPath = Environment.GetCommandLineArgs()[0];
 
             var applicationName = "unknown";
             var applicationPath = "unknown";
@@ -88,31 +96,49 @@ namespace EasyNetQ
             }
 
             var hostname = Environment.MachineName;
+
             var product = Product ?? applicationName;
             var platform = Platform ?? hostname;
+            var name = Name ?? applicationName;
 
-            clientProperties.Add("client_api", "EasyNetQ");
-            clientProperties.Add("product", product);
-            clientProperties.Add("platform", platform);
-            clientProperties.Add("version", version);
-            clientProperties.Add("easynetq_version", version);
-            clientProperties.Add("application", applicationName);
-            clientProperties.Add("application_location", applicationPath);
-            clientProperties.Add("machine_name", hostname);
-            clientProperties.Add("user", UserName);
-            clientProperties.Add("connected", DateTime.UtcNow.ToString("u")); // UniversalSortableDateTimePattern: yyyy'-'MM'-'dd HH':'mm':'ss'Z'
-            clientProperties.Add("requested_heartbeat", RequestedHeartbeat.ToString());
-            clientProperties.Add("timeout", Timeout.ToString());
-            clientProperties.Add("publisher_confirms", PublisherConfirms.ToString());
-            clientProperties.Add("persistent_messages", PersistentMessages.ToString());
+            AddValueIfNotExists(clientProperties, "client_api", "EasyNetQ");
+            AddValueIfNotExists(clientProperties, "product", product);
+            AddValueIfNotExists(clientProperties, "platform", platform);
+            AddValueIfNotExists(clientProperties, "version", version);
+            AddValueIfNotExists(clientProperties, "connection_name", name);
+            AddValueIfNotExists(clientProperties, "easynetq_version", version);
+            AddValueIfNotExists(clientProperties, "application", applicationName);
+            AddValueIfNotExists(clientProperties, "application_location", applicationPath);
+            AddValueIfNotExists(clientProperties, "machine_name", hostname);
+            AddValueIfNotExists(clientProperties, "user", UserName);
+            AddValueIfNotExists(clientProperties, "connected", DateTime.UtcNow.ToString("u")); // UniversalSortableDateTimePattern: yyyy'-'MM'-'dd HH':'mm':'ss'Z'
+            AddValueIfNotExists(clientProperties, "requested_heartbeat", RequestedHeartbeat.ToString());
+            AddValueIfNotExists(clientProperties, "timeout", Timeout.ToString());
+            AddValueIfNotExists(clientProperties, "publisher_confirms", PublisherConfirms.ToString());
+            AddValueIfNotExists(clientProperties, "persistent_messages", PersistentMessages.ToString());
+        }
+
+        private static void AddValueIfNotExists(IDictionary<string, object> clientProperties, string name, string value)
+        {
+            if (!clientProperties.ContainsKey(name))
+                clientProperties.Add(name, value);
         }
 
         public void Validate()
         {
             if (AMQPConnectionString != null && !Hosts.Any(h => h.Host == AMQPConnectionString.Host))
             {
-                if(Port == DefaultPort && AMQPConnectionString.Port > 0) 
-                        Port = (ushort) AMQPConnectionString.Port;
+                if (Port == DefaultPort)
+                {
+                    if (AMQPConnectionString.Port > 0)
+                        Port = (ushort)AMQPConnectionString.Port;
+                    else if(AMQPConnectionString.Scheme.Equals("amqps", StringComparison.OrdinalIgnoreCase))
+                        Port = DefaultAmqpsPort;
+                }
+                if (AMQPConnectionString.Segments.Length > 1)
+                {
+                    VirtualHost = AMQPConnectionString.Segments.Last();
+                }
                 Hosts = Hosts.Concat(new[] {new HostConfiguration {Host = AMQPConnectionString.Host}});
             }
             if (!Hosts.Any())
@@ -127,7 +153,6 @@ namespace EasyNetQ
                 }
             }
 
-            ClientProperties = new Dictionary<string, object>();
             SetDefaultClientProperties(ClientProperties);
         }
     }
@@ -141,6 +166,6 @@ namespace EasyNetQ
 
         public string Host { get; set; }
         public ushort Port { get; set; }
-        public SslOption Ssl { get; private set; }
+        public SslOption Ssl { get; }
     }
 }

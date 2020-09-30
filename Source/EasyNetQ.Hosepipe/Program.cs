@@ -46,7 +46,7 @@ namespace EasyNetQ.Hosepipe
 
         public static void Main(string[] args)
         {
-            var typeNameSerializer = new TypeNameSerializer();
+            var typeNameSerializer = new LegacyTypeNameSerializer();
             var argParser = new ArgParser();
             var arguments = argParser.Parse(args);
 
@@ -71,7 +71,7 @@ namespace EasyNetQ.Hosepipe
                 new FileMessageWriter(),
                 new MessageReader(), 
                 new QueueInsertion(errorMessageSerializer),
-                new ErrorRetry(new JsonSerializer(typeNameSerializer), errorMessageSerializer),
+                new ErrorRetry(new JsonSerializer(), errorMessageSerializer),
                 new Conventions(typeNameSerializer));
             program.Start(args);
         }
@@ -82,10 +82,11 @@ namespace EasyNetQ.Hosepipe
 
             var parameters = new QueueParameters();
             arguments.WithKey("s", a => parameters.HostName = a.Value);
+            arguments.WithKey("sp", a => parameters.HostPort = Convert.ToInt32(a.Value));
             arguments.WithKey("v", a => parameters.VHost = a.Value);
             arguments.WithKey("u", a => parameters.Username = a.Value);
             arguments.WithKey("p", a => parameters.Password = a.Value);
-            arguments.WithKey("o", a => parameters.MessageFilePath = a.Value);
+            arguments.WithKey("o", a => parameters.MessagesOutputDirectory = a.Value);
             arguments.WithKey("q", a => parameters.QueueName = a.Value);
             arguments.WithTypedKeyOptional<int>("n", a => parameters.NumberOfMessagesToRetrieve = int.Parse(a.Value))
                 .FailWith(messsage("Invalid number of messages to retrieve"));
@@ -132,7 +133,7 @@ namespace EasyNetQ.Hosepipe
             messageWriter.Write(WithEach(queueRetreival.GetMessagesFromQueue(parameters), () => count++), parameters);
             
             Console.WriteLine("{0} Messages from queue '{1}'\r\noutput to directory '{2}'", 
-                count, parameters.QueueName, parameters.MessageFilePath);
+                count, parameters.QueueName, parameters.MessagesOutputDirectory);
         }
 
         private void Insert(QueueParameters parameters)
@@ -142,20 +143,20 @@ namespace EasyNetQ.Hosepipe
                 WithEach(messageReader.ReadMessages(parameters), () => count++), parameters);       
             
             Console.WriteLine("{0} Messages from directory '{1}'\r\ninserted into queue '{2}'",
-                count, parameters.MessageFilePath, parameters.QueueName);
+                count, parameters.MessagesOutputDirectory, parameters.QueueName);
         }
 
         private void ErrorDump(QueueParameters parameters)
         {
             if(parameters.QueueName == null)
-                parameters.QueueName = conventions.ErrorQueueNamingConvention();
+                parameters.QueueName = conventions.ErrorQueueNamingConvention(new MessageReceivedInfo());
             Dump(parameters);
         }
 
         private void Retry(QueueParameters parameters)
         {
             var count = 0;
-            var queueName = parameters.QueueName ?? conventions.ErrorQueueNamingConvention();
+            var queueName = parameters.QueueName ?? conventions.ErrorQueueNamingConvention(new MessageReceivedInfo());
             
             errorRetry.RetryErrors(
                 WithEach(
@@ -164,7 +165,7 @@ namespace EasyNetQ.Hosepipe
                 parameters);
 
             Console.WriteLine("{0} Error messages from directory '{1}' republished",
-                count, parameters.MessageFilePath);
+                count, parameters.MessagesOutputDirectory);
         }
 
         private IEnumerable<HosepipeMessage> WithEach(IEnumerable<HosepipeMessage> messages, Action action)
@@ -178,7 +179,7 @@ namespace EasyNetQ.Hosepipe
 
         public static void PrintUsage()
         {
-            using (var manifest = Assembly.GetExecutingAssembly().GetManifestResourceStream("EasyNetQ.Hosepipe.Usage.txt"))
+            using (var manifest = typeof(Program).GetTypeInfo().Assembly.GetManifestResourceStream("EasyNetQ.Hosepipe.Usage.txt"))
             {
                 if(manifest == null)
                 {

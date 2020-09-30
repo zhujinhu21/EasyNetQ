@@ -1,36 +1,42 @@
 ﻿using System.Collections.Generic;
-using RabbitMQ.Client.Framing;
+using FluentAssertions;
 // ReSharper disable InconsistentNaming
 using System;
 using System.Text;
-using NUnit.Framework;
+using Xunit;
 using RabbitMQ.Client;
 
 namespace EasyNetQ.Tests
 {
-    [TestFixture]
     public class JsonSerializerTests
     {
-        private ISerializer serializer;
+        private readonly ISerializer serializer;
 
-        [SetUp]
-        public void SetUp()
+        public JsonSerializerTests()
         {
-            serializer = new JsonSerializer(new TypeNameSerializer());
+            serializer = new JsonSerializer();
         }
 
-        [Test]
+        [Fact]
+        public void Should_be_able_to_serialize_and_deserialize_a_default_message()
+        {
+            var binaryMessage = serializer.MessageToBytes(typeof(MyMessage), default(MyMessage));
+            var deserializedMessage = (MyMessage)serializer.BytesToMessage(typeof(MyMessage), binaryMessage);
+            deserializedMessage.Should().BeNull();
+        }
+
+        [Fact]
         public void Should_be_able_to_serialize_and_deserialize_a_message()
         {
             var message = new MyMessage {Text = "Hello World"};
 
-            var binaryMessage = serializer.MessageToBytes(message);
-            var deseralizedMessage = serializer.BytesToMessage<MyMessage>(binaryMessage);
+            var binaryMessage = serializer.MessageToBytes(typeof(MyMessage), message);
+            var deserializedMessage = (MyMessage)serializer.BytesToMessage(typeof(MyMessage), binaryMessage);
 
-            message.Text.ShouldEqual(deseralizedMessage.Text);
+            message.Text.Should().Be(deserializedMessage.Text);
         }
 
-        [Test]
+        [Fact]
         public void Should_be_able_to_serialize_basic_properties()
         {
             var originalProperties = new BasicProperties
@@ -56,8 +62,8 @@ namespace EasyNetQ.Tests
             };
 
             var messageBasicProperties = new MessageProperties(originalProperties);
-            var binaryMessage = serializer.MessageToBytes(messageBasicProperties);
-            var deserializedMessageBasicProperties = serializer.BytesToMessage<MessageProperties>(binaryMessage);
+            var binaryMessage = serializer.MessageToBytes(typeof(MessageProperties), messageBasicProperties);
+            var deserializedMessageBasicProperties = (MessageProperties)serializer.BytesToMessage(typeof(MessageProperties), binaryMessage);
 
             var newProperties = new BasicProperties();
             deserializedMessageBasicProperties.CopyTo(newProperties);
@@ -69,7 +75,7 @@ namespace EasyNetQ.Tests
                 return builder.ToString();
             };
 
-            getPropertiesString(originalProperties).ShouldEqual(getPropertiesString(newProperties));
+            getPropertiesString(originalProperties).Should().Be(getPropertiesString(newProperties));
         }
 
         class A { }
@@ -79,25 +85,23 @@ namespace EasyNetQ.Tests
             public A AorB { get; set; }
         }
 
-        [Test]
+        [Fact]
         public void Should_be_able_to_serialize_and_deserialize_polymorphic_properties()
         {
-            var bytes = serializer.MessageToBytes<PolyMessage>(new PolyMessage { AorB = new B() });
+            var bytes = serializer.MessageToBytes(typeof(PolyMessage), new PolyMessage { AorB = new B() });
 
-            var result = serializer.BytesToMessage<PolyMessage>(bytes);
+            var result = (PolyMessage)serializer.BytesToMessage(typeof(PolyMessage), bytes);
 
-            Assert.IsInstanceOf<B>(result.AorB);
+            Assert.IsType<B>(result.AorB);
         }
 
-        [Test]
+        [Fact]
         public void Should_be_able_to_serialize_and_deserialize_polymorphic_properties_when_using_TypeNameSerializer()
         {
-            var typeName = new TypeNameSerializer().Serialize(typeof (PolyMessage));
+            var bytes = serializer.MessageToBytes(typeof(PolyMessage), new PolyMessage { AorB = new B() });
+            var result = (PolyMessage)serializer.BytesToMessage(typeof(PolyMessage), bytes);
 
-            var bytes = serializer.MessageToBytes(new PolyMessage { AorB = new B() });
-            var result = (PolyMessage)serializer.BytesToMessage(typeName, bytes);
-
-            Assert.IsInstanceOf<B>(result.AorB);
+            Assert.IsType<B>(result.AorB);
         }
     }
 }

@@ -23,7 +23,7 @@ namespace EasyNetQ.Producer
         {
             var deliveryTag = model.NextPublishSeqNo;
             var requests = unconfirmedChannelRequests.GetOrAdd(model, new ConcurrentDictionary<ulong, TaskCompletionSource<object>>());
-            var confirmation = new TaskCompletionSource<object>();
+            var confirmation = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
             requests.Add(deliveryTag, confirmation);
             return new PublishConfirmationWaiter(deliveryTag, confirmation.Task, cancellation.Token, () => requests.Remove(deliveryTag));
         }
@@ -46,7 +46,6 @@ namespace EasyNetQ.Producer
             var isNack = @event.IsNack;
             if (multiple)
             {
-                // Fix me: ConcurrentDictionary.Keys acquires all locks, it is very expensive operation and could perform slowly.
                 foreach (var sequenceNumber in requests.Keys.Where(x => x <= deliveryTag))
                 {
                     TaskCompletionSource<object> confirmation;
@@ -82,7 +81,8 @@ namespace EasyNetQ.Producer
                     {
                         continue;
                     }
-                    confirmation.TrySetExceptionSafe(new PublishInterruptedException());
+
+                    confirmation.TrySetException(new PublishInterruptedException());
                 }
             }
             unconfirmedChannelRequests.Add(@event.Channel, new ConcurrentDictionary<ulong, TaskCompletionSource<object>>());
@@ -92,11 +92,11 @@ namespace EasyNetQ.Producer
         {
             if (isNack)
             {
-                tcs.TrySetExceptionSafe(new PublishNackedException(string.Format("Broker has signalled that publish {0} was unsuccessful", deliveryTag)));
+                tcs.TrySetException(new PublishNackedException(string.Format("Broker has signalled that publish {0} was unsuccessful", deliveryTag)));
             }
             else
             {
-                tcs.TrySetResultSafe(null);
+                tcs.TrySetResult(null);
             }
         }
     }

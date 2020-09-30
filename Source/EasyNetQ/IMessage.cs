@@ -27,35 +27,33 @@ namespace EasyNetQ
         Type MessageType { get; }
     }
 
-    public class Message<T> : IMessage<T> where T : class
+    public class Message<T> : IMessage<T>
     {
-        public MessageProperties Properties { get; private set; }
-        public Type MessageType { get; private set; }
-        public T Body { get; private set; }
+        public MessageProperties Properties { get; }
+        public Type MessageType { get; }
+        public T Body { get; }
 
         public object GetBody() { return Body; }
 
         public Message(T body)
         {
-            Preconditions.CheckNotNull(body, "body");
             Body = body;
             Properties = new MessageProperties();
-            MessageType = body.GetType();
+            MessageType = body != null ? body.GetType() : typeof(T);
+        }
+
+        public Message()
+        {
+            Body = default;
+            Properties = new MessageProperties();
+            MessageType = typeof(T);
         }
 
         public Message(T body, MessageProperties properties)
         {
-            Preconditions.CheckNotNull(body, "body");
-            Preconditions.CheckNotNull(properties, "properties");
             Body = body;
             Properties = properties;
-            MessageType = body.GetType();
-        }
-
-        public void SetProperties(MessageProperties properties)
-        {
-            Preconditions.CheckNotNull(properties, "properties");
-            Properties = properties;
+            MessageType = body != null ? body.GetType() : typeof(T);
         }
     }
 }

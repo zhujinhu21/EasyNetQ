@@ -13,7 +13,7 @@ namespace EasyNetQ
     {
         private readonly IConventions conventions;
         private readonly IAdvancedBus advancedBus;
-        private readonly IPublishExchangeDeclareStrategy publishExchangeDeclareStrategy;
+        private readonly IExchangeDeclareStrategy exchangeDeclareStrategy;
         private readonly IMessageDeliveryModeStrategy messageDeliveryModeStrategy;
         private readonly IRpc rpc;
         private readonly ISendReceive sendReceive;
@@ -22,22 +22,22 @@ namespace EasyNetQ
         public RabbitBus(
             IConventions conventions,
             IAdvancedBus advancedBus,
-            IPublishExchangeDeclareStrategy publishExchangeDeclareStrategy,
+            IExchangeDeclareStrategy exchangeDeclareStrategy,
             IMessageDeliveryModeStrategy messageDeliveryModeStrategy,
             IRpc rpc,
             ISendReceive sendReceive,
             ConnectionConfiguration connectionConfiguration)
         {
-            Preconditions.CheckNotNull(conventions, "conventions");
-            Preconditions.CheckNotNull(advancedBus, "advancedBus");
-            Preconditions.CheckNotNull(publishExchangeDeclareStrategy, "publishExchangeDeclareStrategy");
-            Preconditions.CheckNotNull(rpc, "rpc");
-            Preconditions.CheckNotNull(sendReceive, "sendReceive");
-            Preconditions.CheckNotNull(connectionConfiguration, "connectionConfiguration");
+            Preconditions.CheckNotNull(conventions, nameof(conventions));
+            Preconditions.CheckNotNull(advancedBus, nameof(advancedBus));
+            Preconditions.CheckNotNull(exchangeDeclareStrategy, nameof(exchangeDeclareStrategy));
+            Preconditions.CheckNotNull(rpc, nameof(rpc));
+            Preconditions.CheckNotNull(sendReceive, nameof(sendReceive));
+            Preconditions.CheckNotNull(connectionConfiguration, nameof(connectionConfiguration));
 
             this.conventions = conventions;
             this.advancedBus = advancedBus;
-            this.publishExchangeDeclareStrategy = publishExchangeDeclareStrategy;
+            this.exchangeDeclareStrategy = exchangeDeclareStrategy;
             this.messageDeliveryModeStrategy = messageDeliveryModeStrategy;
             this.rpc = rpc;
             this.sendReceive = sendReceive;
@@ -80,7 +80,7 @@ namespace EasyNetQ
             if (configuration.Expires != null)
                 easyNetQMessage.Properties.Expiration = configuration.Expires.ToString();
 
-            var exchange = publishExchangeDeclareStrategy.DeclareExchange(advancedBus, messageType, ExchangeType.Topic);
+            var exchange = exchangeDeclareStrategy.DeclareExchange(messageType, ExchangeType.Topic);
             advancedBus.Publish(exchange, configuration.Topic, false, easyNetQMessage);
         }
 
@@ -120,7 +120,7 @@ namespace EasyNetQ
             if (configuration.Expires != null)
                 easyNetQMessage.Properties.Expiration = configuration.Expires.ToString();
 
-            var exchange = await publishExchangeDeclareStrategy.DeclareExchangeAsync(advancedBus, messageType, ExchangeType.Topic).ConfigureAwait(false);
+            var exchange = await exchangeDeclareStrategy.DeclareExchangeAsync(messageType, ExchangeType.Topic).ConfigureAwait(false);
             await advancedBus.PublishAsync(exchange, configuration.Topic, false, easyNetQMessage).ConfigureAwait(false);
         }
 
@@ -152,11 +152,17 @@ namespace EasyNetQ
             var configuration = new SubscriptionConfiguration(connectionConfiguration.PrefetchCount);
             configure(configuration);
 
-            var queueName = conventions.QueueNamingConvention(typeof(T), subscriptionId);
-            var exchangeName = conventions.ExchangeNamingConvention(typeof(T));
+            var queueName = configuration.QueueName ?? conventions.QueueNamingConvention(typeof(T), subscriptionId);
 
-            var queue = advancedBus.QueueDeclare(queueName, autoDelete: configuration.AutoDelete, expires: configuration.Expires, maxPriority: configuration.MaxPriority);
-            var exchange = advancedBus.ExchangeDeclare(exchangeName, ExchangeType.Topic);
+            var queue = advancedBus.QueueDeclare(
+                queueName, 
+                autoDelete: configuration.AutoDelete, 
+                durable: configuration.Durable, 
+                expires: configuration.Expires, 
+                maxPriority: configuration.MaxPriority,
+                maxLength: configuration.MaxLength,
+                maxLengthBytes: configuration.MaxLengthBytes);
+            var exchange = exchangeDeclareStrategy.DeclareExchange(typeof(T), ExchangeType.Topic);
 
             foreach (var topic in configuration.Topics.DefaultIfEmpty("#"))
             {
@@ -169,7 +175,6 @@ namespace EasyNetQ
                 x =>
                     {
                         x.WithPriority(configuration.Priority)
-                         .WithCancelOnHaFailover(configuration.CancelOnHaFailover)
                          .WithPrefetchCount(configuration.PrefetchCount);
                         if (configuration.IsExclusive)
                         {
@@ -183,11 +188,16 @@ namespace EasyNetQ
             where TRequest : class
             where TResponse : class
         {
+            return Request<TRequest, TResponse>(request, x => { });
+        }
+
+        public virtual TResponse Request<TRequest, TResponse>(TRequest request, Action<IRequestConfiguration> configure)
+            where TRequest : class
+            where TResponse : class
+        {
             Preconditions.CheckNotNull(request, "request");
 
-            var task = RequestAsync<TRequest, TResponse>(request);
-            task.Wait();
-            return task.Result;
+            return RequestAsync<TRequest, TResponse>(request, configure).GetAwaiter().GetResult();
         }
 
         public virtual Task<TResponse> RequestAsync<TRequest, TResponse>(TRequest request)
@@ -196,7 +206,16 @@ namespace EasyNetQ
         {
             Preconditions.CheckNotNull(request, "request");
 
-            return rpc.Request<TRequest, TResponse>(request);
+            return rpc.Request<TRequest, TResponse>(request, x => { });
+        }
+
+        public virtual Task<TResponse> RequestAsync<TRequest, TResponse>(TRequest request, Action<IRequestConfiguration> configure)
+            where TRequest : class
+            where TResponse : class
+        {
+            Preconditions.CheckNotNull(request, "request");
+
+            return rpc.Request<TRequest, TResponse>(request, configure);
         }
 
         public virtual IDisposable Respond<TRequest, TResponse>(Func<TRequest, TResponse> responder)
@@ -280,15 +299,9 @@ namespace EasyNetQ
             return sendReceive.Receive(queue, addHandlers, configure);
         }
 
-        public virtual bool IsConnected
-        {
-            get { return advancedBus.IsConnected; }
-        }
+        public virtual bool IsConnected => advancedBus.IsConnected;
 
-        public virtual IAdvancedBus Advanced
-        {
-            get { return advancedBus; }
-        }
+        public virtual IAdvancedBus Advanced => advancedBus;
 
         public virtual void Dispose()
         {

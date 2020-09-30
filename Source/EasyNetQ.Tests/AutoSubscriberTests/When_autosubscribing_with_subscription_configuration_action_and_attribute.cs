@@ -2,76 +2,75 @@
 using System;
 using EasyNetQ.AutoSubscribe;
 using EasyNetQ.FluentConfiguration;
-using NUnit.Framework;
-using Rhino.Mocks;
+using Xunit;
+using NSubstitute;
+using System.Reflection;
+using FluentAssertions;
 
 namespace EasyNetQ.Tests.AutoSubscriberTests
 {
-    [TestFixture]
-    public class When_autosubscribing_with_subscription_configuration_action_and_attribute
+    public class When_autosubscribing_with_subscription_configuration_action_and_attribute : IDisposable
     {
         private IBus bus;
         private Action<ISubscriptionConfiguration> capturedAction;
        
-        [SetUp]
-        public void SetUp()
+        public When_autosubscribing_with_subscription_configuration_action_and_attribute()
         {
-            bus = MockRepository.GenerateMock<IBus>();
+            bus = Substitute.For<IBus>();
            
             var autoSubscriber = new AutoSubscriber(bus, "my_app")
                 {
                         ConfigureSubscriptionConfiguration =
                                 c => c.WithAutoDelete(false)
-                                    .WithCancelOnHaFailover(false)
                                     .WithExpires(11)
                                     .WithPrefetchCount(11)
                                     .WithPriority(11)
                 };
 
-            bus.Stub(x => x.Subscribe(
-                    Arg<string>.Is.Equal("MyActionAndAttributeTest"),
-                    Arg<Action<MessageA>>.Is.Anything,
-                    Arg<Action<ISubscriptionConfiguration>>.Is.Anything
+            bus.When(x => x.Subscribe(
+                    Arg.Is("MyActionAndAttributeTest"),
+                    Arg.Any<Action<MessageA>>(),
+                    Arg.Any<Action<ISubscriptionConfiguration>>()
                     ))
-                    .WhenCalled(a =>
-                        {
-                           capturedAction= (Action<ISubscriptionConfiguration>)a.Arguments[2];
-                        });
+                    .Do(a =>
+                    {
+                        capturedAction = (Action<ISubscriptionConfiguration>)a.Args()[2];
+                    });
 
-            autoSubscriber.Subscribe(GetType().Assembly);
+            autoSubscriber.Subscribe(GetType().GetTypeInfo().Assembly);
         }
 
-        [Test]
+        public void Dispose()
+        {
+            bus.Dispose();
+        }
+
+        [Fact]
         public void Should_have_called_subscribe()
         {
-            bus.AssertWasCalled(
-                    x => x.Subscribe(
-                        Arg<string>.Is.Anything, 
-                        Arg<Action<MessageA>>.Is.Anything, 
-                        Arg<Action<ISubscriptionConfiguration>>.Is.Anything));
-
+            bus.Received().Subscribe(Arg.Any<string>(),
+                                     Arg.Any<Action<MessageA>>(),
+                                     Arg.Any<Action<ISubscriptionConfiguration>>());
         }
 
-        [Test]
+        [Fact]
         public void Should_have_called_subscribe_with_attribute_values_notaction_values()
         {
             var subscriptionConfiguration = new SubscriptionConfiguration(1);
             
             capturedAction(subscriptionConfiguration);
 
-            subscriptionConfiguration.AutoDelete.ShouldBeTrue();
-            subscriptionConfiguration.CancelOnHaFailover.ShouldBeTrue();
-            subscriptionConfiguration.Expires.ShouldEqual(10);
-            subscriptionConfiguration.PrefetchCount.ShouldEqual(10);
-            subscriptionConfiguration.Priority.ShouldEqual(10);
-
+            subscriptionConfiguration.AutoDelete.Should().BeTrue();
+            subscriptionConfiguration.Expires.Should().Be(10);
+            subscriptionConfiguration.PrefetchCount.Should().Be(10);
+            subscriptionConfiguration.Priority.Should().Be(10);
         }
 
         // Discovered by reflection over test assembly, do not remove.
         private class MyConsumerWithActionAndAttribute : IConsume<MessageA>
         {
             [AutoSubscriberConsumer(SubscriptionId = "MyActionAndAttributeTest")]
-            [SubscriptionConfiguration(AutoDelete = true, CancelOnHaFailover = true, Expires = 10, PrefetchCount = 10, Priority = 10)]
+            [SubscriptionConfiguration(AutoDelete = true, Expires = 10, PrefetchCount = 10, Priority = 10)]
             public void Consume(MessageA message)
             {
             }

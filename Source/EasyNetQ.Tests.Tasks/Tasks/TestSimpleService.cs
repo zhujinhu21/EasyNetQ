@@ -24,7 +24,7 @@ namespace EasyNetQ.Tests.Tasks.Tasks
         public Task Run(CancellationToken cancellationToken)
         {
 
-            bus = RabbitHutch.CreateBus("host=localhost", x => x.Register<IEasyNetQLogger>(_ => new NoDebugLogger()));
+            bus = RabbitHutch.CreateBus("host=localhost");
 
             bus.Advanced.Conventions.RpcRequestExchangeNamingConvention = type => customRpcRequestConventionDictionary.ContainsKey(type) ? customRpcRequestConventionDictionary[type] : defaultRpcExchange;
             bus.Advanced.Conventions.RpcResponseExchangeNamingConvention = type => customRpcResponseConventionDictionary.ContainsKey(type) ? customRpcResponseConventionDictionary[type] : defaultRpcExchange;
@@ -46,7 +46,7 @@ namespace EasyNetQ.Tests.Tasks.Tasks
 
         private static Task<TestAsyncResponseMessage> HandleAsyncRequest(TestAsyncRequestMessage request)
         {
-            Console.Out.WriteLine("Got aysnc request '{0}'", request.Text);
+            Console.Out.WriteLine("Got async request '{0}'", request.Text);
 
             return RunDelayed(1000, () =>
             {
@@ -73,22 +73,22 @@ namespace EasyNetQ.Tests.Tasks.Tasks
             return new TestResponseMessage { Id = request.Id, Text = request.Text + " all done!" };
         }
 
-        public static async Task<TestModifiedRequestExhangeResponseMessage> HandleModifiedRequestExchangeRequest(TestModifiedRequestExhangeRequestMessage request)
+        public static Task<TestModifiedRequestExhangeResponseMessage> HandleModifiedRequestExchangeRequest(TestModifiedRequestExhangeRequestMessage request)
         {
             Console.Out.WriteLine("Responding to RPC request from exchange : "+ customRpcRequestConventionDictionary[typeof (TestModifiedRequestExhangeRequestMessage)]);
-            return new TestModifiedRequestExhangeResponseMessage()
+            return Task.FromResult(new TestModifiedRequestExhangeResponseMessage
             {
                 Text = request.Text + " response!"
-            };
+            });
         }
 
-        public static async Task<TestModifiedResponseExhangeResponseMessage> HandleModifiedResponseExchangeRequest(TestModifiedResponseExhangeRequestMessage request)
+        public static Task<TestModifiedResponseExhangeResponseMessage> HandleModifiedResponseExchangeRequest(TestModifiedResponseExhangeRequestMessage request)
         {
             Console.Out.WriteLine("Responding to RPC request from exchange : " + customRpcResponseConventionDictionary[typeof(TestModifiedResponseExhangeResponseMessage)]);
-            return new TestModifiedResponseExhangeResponseMessage()
+            return Task.FromResult(new TestModifiedResponseExhangeResponseMessage()
             {
                 Text = request.Text + " response!"
-            };
+            });
         }
 
         private static Task<T> RunDelayed<T>(int millisecondsDelay, Func<T> func)

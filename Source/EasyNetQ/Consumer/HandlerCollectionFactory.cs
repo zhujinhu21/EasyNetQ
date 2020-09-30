@@ -1,17 +1,12 @@
-﻿namespace EasyNetQ.Consumer
+﻿using EasyNetQ.Topology;
+
+namespace EasyNetQ.Consumer
 {
     public class HandlerCollectionFactory : IHandlerCollectionFactory
     {
-        private readonly IEasyNetQLogger logger;
-
-        public HandlerCollectionFactory(IEasyNetQLogger logger)
+        public IHandlerCollection CreateHandlerCollection(IQueue queue)
         {
-            this.logger = logger;
-        }
-
-        public IHandlerCollection CreateHandlerCollection()
-        {
-            return new HandlerCollection(logger);
+            return new HandlerCollection();
         }
     }
 }

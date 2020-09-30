@@ -2,46 +2,32 @@
 
 using System;
 using System.Threading;
-using EasyNetQ.Loggers;
-using NUnit.Framework;
+using Xunit;
 
 namespace EasyNetQ.Tests.Integration
 {
-    [TestFixture]
     [Explicit("Integration test, requires a RabbitMQ instance on localhost")]
-    public class PublisherConfirmsIntegrationTests
+    public class PublisherConfirmsIntegrationTests : IDisposable
     {
         private IBus bus;
 
-        [SetUp]
-        public void SetUp()
+        public PublisherConfirmsIntegrationTests()
         {
-            var dlogger = new DelegateLogger
-                {
-                    InfoWriteDelegate = (s, o) => Console.WriteLine(s, o),
-                    ErrorWriteDelegate = (s, o) => Console.WriteLine(s, o)
-                };
-
-
-            var logger = new ConsoleLogger();
-
-            bus = RabbitHutch.CreateBus("host=localhost;publisherConfirms=true;timeout=10", 
-                x => x.Register<IEasyNetQLogger>(_ => dlogger));
+            bus = RabbitHutch.CreateBus("host=localhost;publisherConfirms=true;timeout=10");
         }
 
-        [TearDown]
-        public void TearDown()
+        public void Dispose()
         {
             bus.Dispose();
         }
 
-        [Test]
+        [Fact]
         public void Subscribe()
         {
             bus.Subscribe<MyMessage>("publish_confirms", message => {});
         }
 
-        [Test]
+        [Fact]
         public void Should_be_able_to_interrupt_publishing()
         {
             // while we publish with publisher confirms on, we should be able to kill the 
@@ -56,7 +42,7 @@ namespace EasyNetQ.Tests.Integration
             }
         }
 
-        [Test]
+        [Fact]
         public void Should_be_able_to_publish_asynchronously()
         {
             var count = 0;

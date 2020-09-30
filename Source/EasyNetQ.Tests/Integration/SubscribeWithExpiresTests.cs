@@ -1,46 +1,48 @@
 ﻿using System.Threading;
 using EasyNetQ.Management.Client;
 using EasyNetQ.Management.Client.Model;
-using NUnit.Framework;
+using FluentAssertions;
+using Xunit;
 
 namespace EasyNetQ.Tests.Integration
 {
-    [TestFixture]
     public class SubscribeWithExpiresTests
     {
-        [Test, Explicit("Needs a Rabbit instance on localhost to work")]
-        [ExpectedException(typeof(UnexpectedHttpStatusCodeException))]
+        [Fact][Explicit("Needs a Rabbit instance on localhost to work")]
         public void Queue_should_be_deleted_after_the_expires_ttl()
         {
-            var bus = RabbitHutch.CreateBus("host=localhost");
+            Assert.Throws<UnexpectedHttpStatusCodeException>(() =>
+            {
+                var bus = RabbitHutch.CreateBus("host=localhost");
 
-            var subscriptionId = "TestSubscriptionWithExpires";
-            var conventions = new Conventions(new TypeNameSerializer());
-            var queueName = conventions.QueueNamingConvention(typeof(MyMessage), subscriptionId);
-            var client = new ManagementClient("http://localhost", "guest", "guest");
-            var vhost = new Vhost { Name = "/" };
+                var subscriptionId = "TestSubscriptionWithExpires";
+                var conventions = new Conventions(new DefaultTypeNameSerializer());
+                var queueName = conventions.QueueNamingConvention(typeof(MyMessage), subscriptionId);
+                var client = new ManagementClient("http://localhost", "guest", "guest");
+                var vhost = new Vhost { Name = "/" };
 
-            bus.Subscribe<MyMessage>(subscriptionId, message => { }, x => x.WithExpires(1000));
+                bus.Subscribe<MyMessage>(subscriptionId, message => { }, x => x.WithExpires(1000));
 
-            var queue = client.GetQueue(queueName, vhost);
-            queue.ShouldNotBeNull();
-            
-            // this will abandon the queue... poor queue!
-            bus.Dispose();
+                var queue = client.GetQueue(queueName, vhost);
+                queue.Should().NotBeNull();
 
-            Thread.Sleep(1500);
+                // this will abandon the queue... poor queue!
+                bus.Dispose();
 
-            queue = client.GetQueue(queueName, vhost);
-            queue.ShouldBeNull();
+                Thread.Sleep(1500);
+
+                queue = client.GetQueue(queueName, vhost);
+                queue.Should().BeNull();
+            });
         }
 
-        [Test, Explicit("Needs a Rabbit instance on localhost to work")]
+        [Fact][Explicit("Needs a Rabbit instance on localhost to work")]
         public void Queue_should_not_be_deleted_if_expires_is_not_set()
         {
             var bus = RabbitHutch.CreateBus("host=localhost");
 
             var subscriptionId = "TestSubscriptionWithoutExpires";
-            var conventions = new Conventions(new TypeNameSerializer());
+            var conventions = new Conventions(new DefaultTypeNameSerializer());
             var queueName = conventions.QueueNamingConvention(typeof(MyMessage), subscriptionId);
             var client = new ManagementClient("http://localhost", "guest", "guest");
             var vhost = new Vhost { Name = "/" };
@@ -48,7 +50,7 @@ namespace EasyNetQ.Tests.Integration
             bus.Subscribe<MyMessage>(subscriptionId, message => { });
 
             var queue = client.GetQueue(queueName, vhost);
-            queue.ShouldNotBeNull();
+            queue.Should().NotBeNull();
 
             // this will abandon the queue... poor queue!
             bus.Dispose();
@@ -56,7 +58,7 @@ namespace EasyNetQ.Tests.Integration
             Thread.Sleep(1500);
 
             queue = client.GetQueue(queueName, vhost);
-            queue.ShouldNotBeNull();
+            queue.Should().NotBeNull();
         }
     }
 }

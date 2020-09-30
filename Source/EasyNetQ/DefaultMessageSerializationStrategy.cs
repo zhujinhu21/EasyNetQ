@@ -16,7 +16,7 @@ namespace EasyNetQ
         public SerializedMessage SerializeMessage(IMessage message)
         {
             var typeName = typeNameSerializer.Serialize(message.MessageType);
-            var messageBody = serializer.MessageToBytes(message.GetBody());
+            var messageBody = serializer.MessageToBytes(message.MessageType, message.GetBody());
             var messageProperties = message.Properties;
 
             messageProperties.Type = typeName;
@@ -27,16 +27,10 @@ namespace EasyNetQ
             return new SerializedMessage(messageProperties, messageBody);
         }
 
-        public IMessage<T> DeserializeMessage<T>(MessageProperties properties, byte[] body) where T : class
-        {
-            var messageBody = serializer.BytesToMessage<T>(body);
-            return new Message<T>(messageBody, properties);
-        }
-
         public IMessage DeserializeMessage(MessageProperties properties, byte[] body)
         {
             var messageType = typeNameSerializer.DeSerialize(properties.Type);
-            var messageBody = serializer.BytesToMessage(properties.Type, body);
+            var messageBody = serializer.BytesToMessage(messageType, body);
             return MessageFactory.CreateInstance(messageType, messageBody, properties);
         }
     }

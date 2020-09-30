@@ -8,40 +8,37 @@ namespace EasyNetQ.FluentConfiguration
     /// e.g.
     /// x => x.WithTopic("*.brighton")
     /// </summary>
-    /// <typeparam name="T">The message type to be published</typeparam>
     public interface ISubscriptionConfiguration
     {
         /// <summary>
         /// Add a topic for the queue binding
         /// </summary>
         /// <param name="topic">The topic to add</param>
-        /// <returns></returns>
+        /// <returns>Reference to the same <see cref="ISubscriptionConfiguration"/> to allow methods chaining.</returns>
         ISubscriptionConfiguration WithTopic(string topic);
 
         /// <summary>
         /// Configures the queue's durability
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Reference to the same <see cref="ISubscriptionConfiguration"/> to allow methods chaining.</returns>
         ISubscriptionConfiguration WithAutoDelete(bool autoDelete = true);
 
+        /// <summary>
+        /// Configures the queue's durability
+        /// </summary>
+        /// <returns>Reference to the same <see cref="ISubscriptionConfiguration"/> to allow methods chaining.</returns>
+        ISubscriptionConfiguration WithDurable(bool durable = true);
 
         /// <summary>
         /// Configures the consumer's priority
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Reference to the same <see cref="ISubscriptionConfiguration"/> to allow methods chaining.</returns>
         ISubscriptionConfiguration WithPriority(int priority);
-
-        /// <summary>
-        /// Configures the consumer's x-cancel-on-ha-failover attribute
-        /// </summary>
-        /// <returns></returns>
-        ISubscriptionConfiguration WithCancelOnHaFailover(bool cancelOnHaFailover = true);
-
 
         /// <summary>
         /// Configures the consumer's prefetch count
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Reference to the same <see cref="ISubscriptionConfiguration"/> to allow methods chaining.</returns>
         ISubscriptionConfiguration WithPrefetchCount(ushort prefetchCount);
 
         /// <summary>
@@ -54,42 +51,66 @@ namespace EasyNetQ.FluentConfiguration
         /// Leases of durable queues restart when the server restarts.
         /// </summary>
         /// <param name="expires">The value of the x-expires argument or expires policy describes the expiration period in milliseconds and is subject to the same constraints as x-message-ttl and cannot be zero. Thus a value of 1000 means a queue which is unused for 1 second will be deleted.</param>
-        /// <returns></returns>
+        /// <returns>Reference to the same <see cref="ISubscriptionConfiguration"/> to allow methods chaining.</returns>
         ISubscriptionConfiguration WithExpires(int expires);
 
         /// <summary>
         /// Configures the consumer's to be exclusive
         /// </summary>
-        /// <returns></returns>
-        ISubscriptionConfiguration AsExclusive();
+        /// <returns>Reference to the same <see cref="ISubscriptionConfiguration"/> to allow methods chaining.</returns>
+        ISubscriptionConfiguration AsExclusive(bool isExclusive = true);
 
         /// <summary>
         /// Configures the queue's maxPriority
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Reference to the same <see cref="ISubscriptionConfiguration"/> to allow methods chaining.</returns>
         ISubscriptionConfiguration WithMaxPriority(byte priority);
+
+        /// <summary>
+        /// Sets the queue name
+        /// </summary>
+        /// <param name="queueName"></param>
+        /// <returns>Reference to the same <see cref="ISubscriptionConfiguration"/> to allow methods chaining.</returns>
+        ISubscriptionConfiguration WithQueueName(string queueName);
+
+        /// <summary>
+        /// The maximum number of ready messages that may exist on the queue. 
+        /// Messages will be dropped or dead-lettered from the front of the queue to make room for new messages once the limit is reached.
+        /// </summary>
+        /// <returns>Reference to the same <see cref="ISubscriptionConfiguration"/> to allow methods chaining.</returns>
+        ISubscriptionConfiguration WithMaxLength(int maxLength);
+
+        /// <summary>
+        /// The maximum size of the queue in bytes.
+        /// Messages will be dropped or dead-lettered from the front of the queue to make room for new messages once the limit is reached
+        /// </summary>
+        /// <returns>Reference to the same <see cref="ISubscriptionConfiguration"/> to allow methods chaining.</returns>
+        ISubscriptionConfiguration WithMaxLengthBytes(int maxLengthBytes);
     }
 
     public class SubscriptionConfiguration : ISubscriptionConfiguration
     {
-        public IList<string> Topics { get; private set; }
+        public IList<string> Topics { get; }
         public bool AutoDelete { get; private set; }
         public int Priority { get; private set; }
-        public bool CancelOnHaFailover { get; private set; }
         public ushort PrefetchCount { get; private set; }
         public int? Expires { get; private set; }
 
         public bool IsExclusive { get; private set; }
         public byte? MaxPriority { get; private set; }
+        public bool Durable { get; private set; }
+        public string QueueName { get; private set; }
+        public int? MaxLength { get; private set; }
+        public int? MaxLengthBytes { get; private set; }
 
         public SubscriptionConfiguration(ushort defaultPrefetchCount)
         {
             Topics = new List<string>();
             AutoDelete = false;
             Priority = 0;
-            CancelOnHaFailover = false;
             PrefetchCount = defaultPrefetchCount;
             IsExclusive = false;
+            Durable = true;
         }
 
         public ISubscriptionConfiguration WithTopic(string topic)
@@ -104,15 +125,15 @@ namespace EasyNetQ.FluentConfiguration
             return this;
         }
 
-        public ISubscriptionConfiguration WithPriority(int priority)
+        public ISubscriptionConfiguration WithDurable(bool durable = true)
         {
-            Priority = priority;
+            Durable = durable;
             return this;
         }
 
-        public ISubscriptionConfiguration WithCancelOnHaFailover(bool cancelOnHaFailover = true)
+        public ISubscriptionConfiguration WithPriority(int priority)
         {
-            CancelOnHaFailover = cancelOnHaFailover;
+            Priority = priority;
             return this;
         }
 
@@ -128,15 +149,33 @@ namespace EasyNetQ.FluentConfiguration
             return this;
         }
 
-        public ISubscriptionConfiguration AsExclusive()
+        public ISubscriptionConfiguration AsExclusive(bool isExclusive = true)
         {
-            IsExclusive = true;
+            IsExclusive = isExclusive;
             return this;
         }
 
         public ISubscriptionConfiguration WithMaxPriority(byte priority)
         {
             MaxPriority = priority;
+            return this;
+        }
+
+        public ISubscriptionConfiguration WithQueueName(string queueName)
+        {
+            QueueName = queueName;
+            return this;
+        }
+
+        public ISubscriptionConfiguration WithMaxLength(int maxLength)
+        {
+            MaxLength = maxLength;
+            return this;
+        }
+
+        public ISubscriptionConfiguration WithMaxLengthBytes(int maxLengthBytes)
+        {
+            MaxLengthBytes = maxLengthBytes;
             return this;
         }
     }

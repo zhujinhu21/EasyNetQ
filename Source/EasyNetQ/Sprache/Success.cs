@@ -1,6 +1,6 @@
-﻿namespace Sprache
+﻿namespace EasyNetQ.Sprache
 {
-    sealed class Success<T> : ISuccess<T>
+    internal sealed class Success<T> : ISuccess<T>
     {
         readonly Input _remainder;
         readonly T _result;
@@ -11,9 +11,9 @@
             _remainder = remainder;
         }
 
-        public T Result { get { return _result; } }
+        public T Result => _result;
 
-        public Input Remainder { get { return _remainder; } }
+        public Input Remainder => _remainder;
 
         public override string ToString()
         {

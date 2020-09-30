@@ -2,36 +2,30 @@
 
 using System;
 using System.Threading;
-using EasyNetQ.Loggers;
 using EasyNetQ.Scheduling;
-using NUnit.Framework;
+using Xunit;
 
 namespace EasyNetQ.Tests.Integration.Scheduling
 {
-    [TestFixture, Explicit("Requires RabbitMQ instance to be running on localhost")]
-    public class DeadLetterExchangeAndMessageTtlSchedulerTests
+    [Explicit("Requires RabbitMQ instance to be running on localhost")]
+    public class DeadLetterExchangeAndMessageTtlSchedulerTests : IDisposable
     {
         private IBus bus;
-        private ConsoleLogger logger;
 
-        [SetUp]
-        public void SetUp()
+        public DeadLetterExchangeAndMessageTtlSchedulerTests()
         {
-            logger = new ConsoleLogger();
             bus = RabbitHutch.CreateBus("host=localhost", x =>
             {
-                x.Register<IEasyNetQLogger>(_ => logger);
                 x.Register<IScheduler, DeadLetterExchangeAndMessageTtlScheduler>();
             });
         }
 
-        [TearDown]
-        public void TearDown()
+        public void Dispose()
         {
             bus.Dispose();
         }
 
-        [Test]
+        [Fact]
         public void Should_be_able_to_schedule_a_message_with_delay()
         {
             var autoResetEvent = new AutoResetEvent(false);
@@ -50,14 +44,12 @@ namespace EasyNetQ.Tests.Integration.Scheduling
             bus.FuturePublish(TimeSpan.FromSeconds(3), invitation);
 
             if (!autoResetEvent.WaitOne(100000))
-                Assert.Fail();
+                Assert.True(false);
         }
 
-        [Test]
+        [Fact]
         public void High_volume_scheduling_test_with_delay()
         {
-            logger.Debug = false;
-
             bus.Subscribe<PartyInvitation>("schedulingTest1", message =>
                 Console.WriteLine("Got scheduled message: {0}", message.Text));
 
@@ -76,7 +68,7 @@ namespace EasyNetQ.Tests.Integration.Scheduling
         }
 
 
-        [Test]
+        [Fact]
         public void Should_be_able_to_schedule_a_message_with_future_date()
         {
             var autoResetEvent = new AutoResetEvent(false);
@@ -98,11 +90,9 @@ namespace EasyNetQ.Tests.Integration.Scheduling
             autoResetEvent.WaitOne(10000);
         }
 
-        [Test]
+        [Fact]
         public void High_volume_scheduling_test_with_future_date()
         {
-            logger.Debug = false;
-
             bus.Subscribe<PartyInvitation>("schedulingTest1", message =>
                 Console.WriteLine("Got scheduled message: {0}", message.Text));
 
@@ -121,7 +111,7 @@ namespace EasyNetQ.Tests.Integration.Scheduling
         }
 
 
-        [Test]
+        [Fact]
         public void Should_be_unable_to_cancel_a_message()
         {
             Assert.Throws<NotImplementedException>(() => bus.CancelFuturePublish("my_cancellation_key"));
